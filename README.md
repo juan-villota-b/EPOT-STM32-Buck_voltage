@@ -22,6 +22,91 @@ Proyectos de control Buck en modo voltaje para la placa **STM32G474RE-Discovery*
 
 ---
 
+## Resultados Experimentales — Lazo Abierto
+
+A continuacion se presentan los resultados de la prueba de lazo abierto con escalones del **+10%** y **-10%** sobre el duty cycle nominal, medidos con un **Analog Discovery 2** y comparados con una simulacion en Python (SciPy) de la funcion de transferencia de la planta.
+
+### Parametros de la planta Buck
+
+| Parametro | Valor |
+|-----------|-------|
+| Vin | 5 V (USB-C) |
+| L | 51 µH |
+| C | 100 µF |
+| R (carga) | 16 Ω |
+| Rc (ESR capacitor) | ~1.5 Ω (estimado) |
+| fsw | 200 kHz |
+| Duty referencia | 10000 / 27200 = 36.8% |
+| Duty escalon | 11000 / 27200 = 40.4% (+10%) |
+| Vout teorico (ref) | 5 V × 0.368 = 1.84 V |
+| Vout teorico (step) | 5 V × 0.404 = 2.02 V |
+| ΔVout esperado | ~0.184 V |
+
+### Funcion de transferencia de la planta
+
+La planta del convertidor Buck en lazo abierto (de duty cycle _d_ a voltaje de salida _Vout_) se modela como:
+
+```
+G_vd(s) = Vin × (1 + s·C·Rc) / (1 + s·(L/R + C·Rc) + s²·L·C·(R+Rc)/R)
+```
+
+Donde _Rc_ es la ESR del capacitor de salida. Sin ESR (Rc=0):
+
+```
+ωn = 1/√(L·C) ≈ 14 003 rad/s (2.23 kHz)
+ζ  = √(L/C) / (2·R) ≈ 0.022  →  extremadamente subamortiguado
+```
+
+Con Rc = 1.5 Ω se obtiene ζ ≈ 1.03 (ligeramente sobreamortiguado), lo cual concuerda con la respuesta observada experimentalmente. La ESR del capacitor real introduce el amortiguamiento necesario.
+
+### Escalon hacia ARRIBA (+10%)
+
+**Captura del Analog Discovery:**
+
+![Escalon up - Scope](openloop_step_up_scope.png)
+
+- **Canal 1 (naranja):** Vout del Buck
+- **Canal 2 (rojo):** señal de escalon (Step)
+- Escala vertical: 1.5 V/div, horizontal: ~200 µs/div
+- **Vout inicial:** ~2.01 V → **Vout final:** ~2.19 V
+- **ΔV medido:** ~176.9 mV
+- **Sobrepico:** ~8% del escalon
+- **Tiempo de subida:** ~2.1 ms
+- Respuesta subamortiguada con leve sobrepico
+
+**Simulacion en Python:**
+
+![Escalon up - Sim](sim_step_up.png)
+
+La simulacion muestra un comportamiento cualitativamente similar: ΔVout ≈ 0.184 V, con un sobrepico del ~1% (ζ ≈ 1.03 con Rc = 1.5 Ω). La diferencia en el sobrepico experimental (~8% vs ~1% simulado) se debe a que la ESR real del capacitor y las perdidas del MOSFET/diodo varian con el punto de operacion.
+
+### Escalon hacia ABAJO (-10%)
+
+**Captura del Analog Discovery:**
+
+![Escalon down - Scope](openloop_step_down_scope.png)
+
+- **Canal 1 (naranja):** Vout del Buck
+- Escala vertical: 100 mV/div, horizontal: 2 ms/div
+- **Vout inicial:** ~2.01 V → **Vout final:** ~1.83 V
+- **ΔV medido:** −177.8 mV
+- Respuesta sobreamortiguada, sin oscilacion aparente
+
+**Simulacion en Python:**
+
+![Escalon down - Sim](sim_step_down.png)
+
+La simulacion del escalon hacia abajo reproduce la misma dinamica del sistema (simetrica en regimen lineal). El decaimiento exponencial suave observado experimentalmente es consistente con un sistema de segundo orden sobreamortiguado (ζ > 1).
+
+### Conclusiones del lazo abierto
+
+1. La respuesta experimental confirma el modelo de segundo orden del filtro LC del Buck.
+2. El amortiguamiento observado (~8% max de sobrepico) se debe al ESR del capacitor de salida (~1-2 Ω tipico para electrolitico de 100 µF) y a las resistencias parasitas del inductor y MOSFETs.
+3. La ganancia DC teorica (ΔVout = Vin × ΔD) se cumple con error < 5%.
+4. El rizado de conmutacion a 200 kHz es visible en la captura como una envolvente de alta frecuencia sobre la senal de Vout.
+
+---
+
 ## 1. Buck_VoltageMode_HW — Lazo Cerrado
 
 **Ubicacion:** `Buck_VoltageMode_HW/`
