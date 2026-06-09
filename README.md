@@ -34,8 +34,9 @@ A continuacion se presentan los resultados de la prueba de lazo abierto con esca
 | L | 51 µH |
 | C | 100 µF |
 | R (carga) | 16 Ω |
-| Rc (ESR capacitor) | ~1.5 Ω (estimado) |
+| R_parasitica (ESR + DCR + Rds_on) | ~3.5 Ω (estimado) |
 | fsw | 200 kHz |
+| Saturacion PWM | D_min = 10%, D_max = 90% |
 | Duty referencia | 10000 / 27200 = 36.8% |
 | Duty escalon | 11000 / 27200 = 40.4% (+10%) |
 | Vout teorico (ref) | 5 V × 0.368 = 1.84 V |
@@ -47,17 +48,30 @@ A continuacion se presentan los resultados de la prueba de lazo abierto con esca
 La planta del convertidor Buck en lazo abierto (de duty cycle _d_ a voltaje de salida _Vout_) se modela como:
 
 ```
-G_vd(s) = Vin × (1 + s·C·Rc) / (1 + s·(L/R + C·Rc) + s²·L·C·(R+Rc)/R)
+G_vd(s) = Vin × (1 + s·C·R_par) / (1 + s·(L/R + C·R_par) + s²·L·C·(R+R_par)/R)
 ```
 
-Donde _Rc_ es la ESR del capacitor de salida. Sin ESR (Rc=0):
+Donde _R_par_ agrupa todas las resistencias parasitas: ESR del capacitor, DCR del inductor y Rds(on) del MOSFET.
+
+#### ?`Por que el modelo ideal NO coincide con el experimento?
+
+El filtro LC sin parasitos (R_par = 0) da:
 
 ```
-ωn = 1/√(L·C) ≈ 14 003 rad/s (2.23 kHz)
-ζ  = √(L/C) / (2·R) ≈ 0.022  →  extremadamente subamortiguado
+ωn = 1/√(L·C) ≈ 14 003 rad/s (2.23 kHz)
+ζ  = √(L/C) / (2·R) = 0.022  →  extremadamente subamortiguado
 ```
 
-Con Rc = 1.5 Ω se obtiene ζ ≈ 1.03 (ligeramente sobreamortiguado), lo cual concuerda con la respuesta observada experimentalmente. La ESR del capacitor real introduce el amortiguamiento necesario.
+Con ζ = 0.022, el sobreimpulso teorico seria **~93%**, pero **en el experimento NO hay sobreimpulso**. El voltaje sube suavemente hasta el valor de regimen permanente sin oscilar ni pasarse. Esto se debe a que:
+
+1. **La ESR del capacitor de salida** (~1-3 Ω para electrolitico de 100 µF) introduce un cero y amortiguamiento adicional.
+2. **La DCR del inductor** (resistencia serie, tipicamente decenas de mΩ) disipa energia.
+3. **El Rds(on) del MOSFET** (~50-100 mΩ) y las perdidas de conmutacion agregan amortiguamiento.
+4. **La saturacion del PWM** limita el duty entre 10% y 90% → Vout entre 0.5 V y 4.5 V, acotando la excursion.
+
+Con R_par = 3.5 Ω se obtiene ζ = 2.24 (claramente sobreamortiguado), sin ningun sobreimpulso, consistente con la observacion experimental.
+
+> **Nota:** El modelo ideal de segundo orden LC sin ESR **NO representa correctamente** la dinamica real del lazo abierto. Es necesario incluir las resistencias parasitas para obtener una respuesta sobreamortiguada sin pico, tal como se observa en el laboratorio.
 
 ### Escalon hacia ARRIBA (+10%)
 
@@ -66,19 +80,19 @@ Con Rc = 1.5 Ω se obtiene ζ ≈ 1.03 (ligeramente sobreamortiguado), lo cual c
 ![Escalon up - Scope](openloop_step_up_scope.png)
 
 - **Canal 1 (naranja):** Vout del Buck
-- **Canal 2 (rojo):** señal de escalon (Step)
+- **Canal 2 (rojo):** senal de escalon (Step)
 - Escala vertical: 1.5 V/div, horizontal: ~200 µs/div
 - **Vout inicial:** ~2.01 V → **Vout final:** ~2.19 V
 - **ΔV medido:** ~176.9 mV
-- **Sobrepico:** ~8% del escalon
-- **Tiempo de subida:** ~2.1 ms
-- Respuesta subamortiguada con leve sobrepico
+- **Sin sobreimpulso:** Vout no excede el valor final de regimen permanente
+- **Tiempo de transicion:** ~2.1 ms
+- Respuesta sobreamortiguada (decaimento exponencial suave)
 
-**Simulacion en Python:**
+**Simulacion en Python (corregida con R_par = 3.5 Ω):**
 
 ![Escalon up - Sim](sim_step_up.png)
 
-La simulacion muestra un comportamiento cualitativamente similar: ΔVout ≈ 0.184 V, con un sobrepico del ~1% (ζ ≈ 1.03 con Rc = 1.5 Ω). La diferencia en el sobrepico experimental (~8% vs ~1% simulado) se debe a que la ESR real del capacitor y las perdidas del MOSFET/diodo varian con el punto de operacion.
+La simulacion corregida muestra ζ = 2.24 (sobreamortiguado), sin ningun pico ni oscilacion, coincidiendo con la dinamica observada experimentalmente. El polo dominante tiene τ ≈ 0.33 ms y el tiempo de establecimiento al 98% es ~1.3 ms. La saturacion del PWM entre 10%-90% (0.5 V - 4.5 V) se indica con lineas rojas punteadas; el escalon opera muy dentro del rango lineal, por lo que la saturacion no afecta esta prueba.
 
 ### Escalon hacia ABAJO (-10%)
 
@@ -90,20 +104,22 @@ La simulacion muestra un comportamiento cualitativamente similar: ΔVout ≈ 0.1
 - Escala vertical: 100 mV/div, horizontal: 2 ms/div
 - **Vout inicial:** ~2.01 V → **Vout final:** ~1.83 V
 - **ΔV medido:** −177.8 mV
-- Respuesta sobreamortiguada, sin oscilacion aparente
+- **Sin sobreimpulso:** Vout no cae por debajo del valor final
+- Decaimiento exponencial puro, sin oscilacion
 
-**Simulacion en Python:**
+**Simulacion en Python (corregida):**
 
 ![Escalon down - Sim](sim_step_down.png)
 
-La simulacion del escalon hacia abajo reproduce la misma dinamica del sistema (simetrica en regimen lineal). El decaimiento exponencial suave observado experimentalmente es consistente con un sistema de segundo orden sobreamortiguado (ζ > 1).
+Respuesta simetrica al escalon hacia arriba (el modelo es lineal para pequena senal). Misma dinamica sobreamortiguada, sin undershoot. La saturacion del PWM en el limite inferior (10% → Vout_min = 0.5 V) no se alcanza en esta prueba.
 
 ### Conclusiones del lazo abierto
 
-1. La respuesta experimental confirma el modelo de segundo orden del filtro LC del Buck.
-2. El amortiguamiento observado (~8% max de sobrepico) se debe al ESR del capacitor de salida (~1-2 Ω tipico para electrolitico de 100 µF) y a las resistencias parasitas del inductor y MOSFETs.
-3. La ganancia DC teorica (ΔVout = Vin × ΔD) se cumple con error < 5%.
-4. El rizado de conmutacion a 200 kHz es visible en la captura como una envolvente de alta frecuencia sobre la senal de Vout.
+1. **Respuesta sobreamortiguada confirmada:** El sistema real NO presenta sobreimpulso. El voltaje converge suavemente al nuevo regimen permanente.
+2. **El amortiguamiento es dominado por parasitos:** Para que el modelo teorico tenga sentido, se debe incluir al menos la ESR del capacitor (~1-3 Ω). Sin esto, el modelo ideal de segundo orden predice oscilaciones irreales.
+3. **Ganancia DC verificada:** ΔVout = Vin × ΔD = 5 × 0.0368 = 184 mV vs 177 mV medido → error < 4%.
+4. **Saturacion del PWM:** Los limites D_min = 10% y D_max = 90% definen la ventana de operacion lineal. Para excursiones grandes de duty, la respuesta se recortaria en estos limites.
+5. **Aproximacion de primer orden:** Con ζ = 2.24, el polo lento domina dando una dinamica tipo RC con τ_eff ≈ R·C = 1.6 ms. Esto simplifica el analisis para diseno del controlador.
 
 ---
 
