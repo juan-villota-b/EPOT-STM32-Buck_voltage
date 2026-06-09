@@ -1,0 +1,25 @@
+# IDE cache & settings
+.settings/
+.vscode/
+.clangd
+.extSettings
+.mxproject
+
+# Build artifacts
+build/
+Debug/
+Release/
+*.wds
+*.bode3
+*.ewp
+*.eww
+*.uvoptx
+*.uvprojx
+
+# Other IDE configs (IAR, Keil)
+EWARM/
+MDK-ARM/
+
+# OS files
+.DS_Store
+Thumbs.db
